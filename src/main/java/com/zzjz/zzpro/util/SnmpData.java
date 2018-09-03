@@ -261,7 +261,7 @@ public class SnmpData {
             pdu.add(new VariableBinding(targetOID));
 
             boolean finished = false;
-            System.out.println("----> demo start <----");
+            //System.out.println("----> demo start <----");
             while (!finished) {
                 VariableBinding vb = null;
                 ResponseEvent respEvent = snmp.getNext(pdu, target);
@@ -278,18 +278,18 @@ public class SnmpData {
                 // check finish
                 finished = checkWalkFinished(targetOID, pdu, vb);
                 if (!finished) {
-                    System.out.println("==== walk each vlaue :");
-                    System.out.println(vb.getOid() + " = " + vb.getVariable());
+                    //System.out.println("==== walk each vlaue :");
+                    //System.out.println(vb.getOid() + " = " + vb.getVariable());
                     resMap.put(vb.getOid().toString(), vb.getVariable().toString());
                     // Set up the variable binding for the next entry.
                     pdu.setRequestID(new Integer32(0));
                     pdu.set(0, vb);
                 } else {
-                    System.out.println("SNMP walk OID has finished.");
+                    //System.out.println("SNMP walk OID has finished.");
                     snmp.close();
                 }
             }
-            System.out.println("----> demo end <----");
+            //System.out.println("----> demo end <----");
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println("SNMP walk Exception: " + e);

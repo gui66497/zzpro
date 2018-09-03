@@ -43,6 +43,11 @@ public class Constant {
     public static final String SWITCH_PORT = "GigabitEthernet1/0/1";
 
     /**
+     * 32位交换机流量存储最大值 2^32
+     */
+    public static final long SNMP_MAX_DATA = 4294967296L;
+
+    /**
      * oid的枚举
      */
     public enum Oid {
