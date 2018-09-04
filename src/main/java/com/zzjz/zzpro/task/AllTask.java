@@ -1,6 +1,5 @@
 package com.zzjz.zzpro.task;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -55,9 +54,8 @@ public class AllTask {
      * 每过20秒获取交换机流量并计算速率
      */
     @Scheduled(cron = "0/20 * * * * *")
-    public void timer() {
+    public void snmpSpeed() {
         System.out.println(switches);
-        ObjectMapper mapper = new ObjectMapper();
         JsonArray jsonArray = new JsonParser().parse(switches).getAsJsonArray();
         for (JsonElement element : jsonArray) {
             System.out.println(element);
@@ -84,24 +82,20 @@ public class AllTask {
             inDataMap.forEach((k, v) -> {
                 String key = k.substring(k.lastIndexOf(".") + 1);
                 String portName = ipDescMap.get(key);
+                //只存储ports中指定的端口
                 if (!portList.contains(portName)) {
                     return;
                 }
-                //只存储ports中指定的
-                if (IN_MAP.get(portName) == null) {
-                    List list = new ArrayList(2);
-                    list.add(sec);
-                    list.add(new BigDecimal(v));
-                    IN_MAP.put(portName, list);
-                } else {
+                if (IN_MAP.get(portName) != null) {
+                    //没有缓存的计算不了
                     long oldTime = (long) IN_MAP.get(portName).get(0);
                     BigDecimal oldValue = (BigDecimal) IN_MAP.get(portName).get(1);
                     BigDecimal nowValue = new BigDecimal(v);
                     long newTime = System.currentTimeMillis();
-                    long interal = (newTime - oldTime)/1000;
+                    long interval = (newTime - oldTime) / 1000;
                     //计算速率 单位为bps
-                    System.out.println("输入interal:" + interal);
-                    Long speed = nowValue.subtract(oldValue).multiply(new BigDecimal(8)).divide(new BigDecimal(interal), BigDecimal.ROUND_HALF_UP).longValue();
+                    System.out.println("输入interval:" + interval);
+                    Long speed = nowValue.subtract(oldValue).multiply(new BigDecimal(8)).divide(new BigDecimal(interval), BigDecimal.ROUND_HALF_UP).longValue();
                     inJsonMap.put("sys_name", sysName);
                     inJsonMap.put("port_index", key);
                     inJsonMap.put("port_name", portName);
@@ -109,35 +103,30 @@ public class AllTask {
                     inJsonMap.put("oid", k);
                     inJsonMap.put("flow_type", "in");
                     inJsonMap.put("insert_time", new Date());
-                    List list = new ArrayList(2);
-                    list.add(sec);
-                    list.add(nowValue);
-                    IN_MAP.put(portName, list);
                     request.add(new IndexRequest("snmp_speed-" + dayStr, "doc").source(inJsonMap));
                 }
+                //将此次值缓存
+                IN_MAP.put(portName, Arrays.asList(sec, new BigDecimal(v)));
             });
             //输出流量
             Map<String, Object> outJsonMap = new HashMap<>();
             outDataMap.forEach((k, v) -> {
                 String key = k.substring(k.lastIndexOf(".") + 1);
                 String portName = ipDescMap.get(key);
+                //只存储ports中指定的端口
                 if (!portList.contains(portName)) {
                     return;
                 }
-                if (OUT_MAP.get(portName) == null) {
-                    List list = new ArrayList(2);
-                    list.add(sec);
-                    list.add(new BigDecimal(v));
-                    OUT_MAP.put(portName, list);
-                } else {
+                if (OUT_MAP.get(portName) != null) {
+                    //没有缓存的计算不了
                     long oldTime = (long) OUT_MAP.get(portName).get(0);
                     BigDecimal oldValue = (BigDecimal) OUT_MAP.get(portName).get(1);
                     BigDecimal nowValue = new BigDecimal(v);
                     long newTime = System.currentTimeMillis();
-                    long interal = (newTime - oldTime)/1000;
-                    System.out.println("输出interal:" + interal);
+                    long interval = (newTime - oldTime)/1000;
+                    System.out.println("输出interval:" + interval);
                     //计算速率 单位为bps
-                    Long speed = nowValue.subtract(oldValue).multiply(new BigDecimal(8)).divide(new BigDecimal(interal), BigDecimal.ROUND_HALF_UP).longValue();
+                    Long speed = nowValue.subtract(oldValue).multiply(new BigDecimal(8)).divide(new BigDecimal(interval), BigDecimal.ROUND_HALF_UP).longValue();
                     outJsonMap.put("sys_name", sysName);
                     outJsonMap.put("port_index", key);
                     outJsonMap.put("port_name", portName);
@@ -145,64 +134,31 @@ public class AllTask {
                     outJsonMap.put("oid", k);
                     outJsonMap.put("flow_type", "out");
                     outJsonMap.put("insert_time", new Date());
-                    List list = new ArrayList(2);
-                    list.add(sec);
-                    list.add(nowValue);
-                    OUT_MAP.put(portName, list);
                     request.add(new IndexRequest("snmp_speed-" + dayStr, "doc").source(outJsonMap));
                 }
+                //将此次值缓存
+                OUT_MAP.put(portName, Arrays.asList(sec, new BigDecimal(v)));
             });
-        BulkResponse bulkResponse;
-        try {
-            if (request.requests().size() > 0) {
-                bulkResponse = client.bulk(request);
-                LOGGER.info("snmp插入执行结果:" + (bulkResponse.hasFailures() ? "有错误" : "成功"));
-                LOGGER.info("snmp插入执行用时:" + bulkResponse.getTook().getMillis() + "毫秒");
+            BulkResponse bulkResponse;
+            try {
+                if (request.requests().size() > 0) {
+                    bulkResponse = client.bulk(request);
+                    LOGGER.info("snmp插入执行结果:" + (bulkResponse.hasFailures() ? "有错误" : "成功"));
+                    LOGGER.info("snmp插入执行用时:" + bulkResponse.getTook().getMillis() + "毫秒");
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        try {
-            client.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+            try {
+                client.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
 
     }
 
     public static void main(String[] args) {
-        /*SnmpData snmpData = new SnmpData();
-        Map<String, String> ipDescMap = new HashMap<>();
-        String sysName = snmpData.snmpGet(Constant.SWITCH_IP, Constant.COMMUNITY, Constant.Oid.sysName.getValue());
-        Map<String, String> ipDescMapLong = snmpData.snmpWalk(Constant.SWITCH_IP, Constant.COMMUNITY, Constant.Oid.ipDescr.getValue());
-        Map<String, String> inDataMap = snmpData.snmpWalk(Constant.SWITCH_IP, Constant.COMMUNITY, Constant.Oid.ifHCInOctets.getValue());
-        Map<String, String> outDataMap = snmpData.snmpWalk(Constant.SWITCH_IP, Constant.COMMUNITY, Constant.Oid.ifHCOutOctets.getValue());
-        ipDescMapLong.forEach((k, v) -> ipDescMap.put(k.substring(k.lastIndexOf(".") + 1), v));
-        Map<String, Object> inJsonMap = new HashMap<>();
-        //输入流量
-        inDataMap.forEach((k, v) -> {
-            String key = k.substring(k.lastIndexOf(".") + 1);
-            String portName = ipDescMap.get(key);
-            if (map.get(portName) == null) {
-                map.put(portName, new BigDecimal(v));
-            } else {
-                BigDecimal oldValue = map.get(portName);
-                BigDecimal nowValue = new BigDecimal(v);
-                //计算速率 单位为bps
-                Long speed = nowValue.subtract(oldValue).multiply(new BigDecimal(8)).divide(new BigDecimal(10)).longValue();
-                inJsonMap.put("sys_name", sysName);
-                inJsonMap.put("port_index", key);
-                inJsonMap.put("port_name", portName);
-                inJsonMap.put("speed", speed);
-                inJsonMap.put("oid", k);
-                inJsonMap.put("flow_type", "in");
-                inJsonMap.put("insert_time", new Date());
-                System.out.println(inJsonMap);
-            }
-        });*/
-
-
 
     }
 }
