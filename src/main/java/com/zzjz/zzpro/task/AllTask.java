@@ -51,9 +51,9 @@ public class AllTask {
     private static ConcurrentHashMap<String, List> OUT_MAP = new ConcurrentHashMap<>();
 
     /**
-     * 每过20秒获取交换机流量并计算速率
+     * 每过30秒获取交换机流量并计算速率(单位 kbps)
      */
-    @Scheduled(cron = "0/20 * * * * *")
+    @Scheduled(cron = "0/30 * * * * *")
     public void snmpSpeed() {
         System.out.println(switches);
         JsonArray jsonArray = new JsonParser().parse(switches).getAsJsonArray();
@@ -95,8 +95,11 @@ public class AllTask {
                     long interval = (newTime - oldTime) / 1000;
                     //计算速率 单位为bps
                     System.out.println("输入interval:" + interval);
-                    Long speed = nowValue.subtract(oldValue).multiply(new BigDecimal(8)).divide(new BigDecimal(interval), BigDecimal.ROUND_HALF_UP).longValue();
+                    Long speed = nowValue.subtract(oldValue).multiply(new BigDecimal(8))
+                                         .divide(new BigDecimal(interval), BigDecimal.ROUND_HALF_UP)
+                                         .divide(BigDecimal.valueOf(1024), BigDecimal.ROUND_HALF_UP).longValue();
                     inJsonMap.put("sys_name", sysName);
+                    inJsonMap.put("ip", switchIp);
                     inJsonMap.put("port_index", key);
                     inJsonMap.put("port_name", portName);
                     inJsonMap.put("speed", speed);
@@ -126,8 +129,11 @@ public class AllTask {
                     long interval = (newTime - oldTime)/1000;
                     System.out.println("输出interval:" + interval);
                     //计算速率 单位为bps
-                    Long speed = nowValue.subtract(oldValue).multiply(new BigDecimal(8)).divide(new BigDecimal(interval), BigDecimal.ROUND_HALF_UP).longValue();
+                    Long speed = nowValue.subtract(oldValue).multiply(new BigDecimal(8))
+                            .divide(new BigDecimal(interval), BigDecimal.ROUND_HALF_UP)
+                            .divide(BigDecimal.valueOf(1024), BigDecimal.ROUND_HALF_UP).longValue();
                     outJsonMap.put("sys_name", sysName);
+                    outJsonMap.put("ip", switchIp);
                     outJsonMap.put("port_index", key);
                     outJsonMap.put("port_name", portName);
                     outJsonMap.put("speed", speed);
@@ -155,7 +161,6 @@ public class AllTask {
                 e.printStackTrace();
             }
         }
-
     }
 
     public static void main(String[] args) {

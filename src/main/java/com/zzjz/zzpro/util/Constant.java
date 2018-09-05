@@ -1,5 +1,7 @@
 package com.zzjz.zzpro.util;
 
+import java.math.BigDecimal;
+
 /**
  * @author 房桂堂
  * @description Constant
@@ -93,4 +95,36 @@ public class Constant {
             this.value = value;
         }
     }
+
+    /**
+     * bit(位)根据长度转成kb(千字节)和mb(兆字节)或gb
+     * @param bytes 字节
+     * @return String
+     */
+    public static String bit2kb(long bytes, int scale) {
+        BigDecimal filesize = new BigDecimal(bytes);
+        //8 * 1024 * 1024 * 2024 * 1024
+        BigDecimal petabyte = new BigDecimal( 8796093022208L);
+        BigDecimal returnValue = filesize.divide(petabyte, scale, BigDecimal.ROUND_HALF_UP);
+        if (returnValue.floatValue() >= 1) {
+            return (returnValue + "PB");
+        }
+        //8 * 1024 * 1024 * 2024
+        BigDecimal gigabyte = new BigDecimal( 8589934592L);
+        returnValue = filesize.divide(gigabyte, scale, BigDecimal.ROUND_HALF_UP);
+        if (returnValue.floatValue() >= 1) {
+            return (returnValue + "GB");
+        }
+        BigDecimal megabyte = new BigDecimal(8 * 1024 * 1024);
+        returnValue = filesize.divide(megabyte, scale, BigDecimal.ROUND_HALF_UP);
+        if (returnValue.floatValue() >= 1) {
+            return (returnValue + "MB");
+        }
+        BigDecimal kilobyte = new BigDecimal(8 * 1024);
+        returnValue = filesize.divide(kilobyte, scale, BigDecimal.ROUND_HALF_UP);
+        return (returnValue + "KB");
+    }
+
+    public static final String SNMP_SPEED = "snmp_speed-*";
+
 }
