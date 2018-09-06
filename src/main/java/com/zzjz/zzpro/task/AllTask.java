@@ -1,18 +1,20 @@
 package com.zzjz.zzpro.task;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.zzjz.zzpro.entity.Switches;
+import com.zzjz.zzpro.service.SnmpService;
 import com.zzjz.zzpro.util.Constant;
 import com.zzjz.zzpro.util.SnmpData;
 import org.apache.http.HttpHost;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.search.SearchRequest;
+import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,6 +46,9 @@ public class AllTask {
     @Autowired
     SnmpData snmpData;
 
+    @Autowired
+    SnmpService snmpService;
+
     @Value("${switches}")
     String switches;
 
@@ -55,23 +61,22 @@ public class AllTask {
      */
     @Scheduled(cron = "0/30 * * * * *")
     public void snmpSpeed() {
-        System.out.println(switches);
-        JsonArray jsonArray = new JsonParser().parse(switches).getAsJsonArray();
-        for (JsonElement element : jsonArray) {
-            System.out.println(element);
-            String switchIp = ((JsonObject) element).get("ip").getAsString();
-            String community = ((JsonObject) element).get("community").getAsString();
-            JsonArray ports = ((JsonObject) element).getAsJsonArray("ports");
-            Gson gson = new Gson();
-            ArrayList portList = gson.fromJson(ports, ArrayList.class);
+        //先从switch表中获取所有交换机 之前是读的配置文件
+        //JsonArray jsonArray = new JsonParser().parse(switches).getAsJsonArray();
+        List<Switches> switches = getEnabledSwitches();
+        for (Switches switchesOne : switches) {
+            System.out.println(switchesOne);
+            String switchIp = switchesOne.getIp();
+            String community = switchesOne.getCommunity();
+            List<String> portList = switchesOne.getPorts();
 
             RestHighLevelClient client = new RestHighLevelClient(
                     RestClient.builder(new HttpHost(Constant.ES_HOST, Constant.ES_PORT, Constant.ES_METHOD)));
             BulkRequest request = new BulkRequest();
             SnmpData snmpData = new SnmpData();
             Map<String, String> ipDescMap = new HashMap<>();
-            String sysName = snmpData.snmpGet(switchIp, community, Constant.Oid.sysName.getValue());
-            Map<String, String> ipDescMapLong = snmpData.snmpWalk(switchIp, community, Constant.Oid.ipDescr.getValue());
+            String sysName = snmpService.getSysName(switchIp, community);
+            Map<String, String> ipDescMapLong = snmpService.getPortMap(switchIp, community);
             Map<String, String> inDataMap = snmpData.snmpWalk(switchIp, community, Constant.Oid.ifHCInOctets.getValue());
             Map<String, String> outDataMap = snmpData.snmpWalk(switchIp, community, Constant.Oid.ifHCOutOctets.getValue());
             long sec = System.currentTimeMillis();
@@ -163,7 +168,49 @@ public class AllTask {
         }
     }
 
-    public static void main(String[] args) {
+    /**
+     * 获取启用的交换机列表
+     * @return 列表
+     */
+    public List<Switches> getEnabledSwitches() {
+        RestHighLevelClient client = new RestHighLevelClient(
+                RestClient.builder(
+                        new HttpHost(Constant.ES_HOST, Constant.ES_PORT, Constant.ES_METHOD)));
+        SearchRequest searchRequest = new SearchRequest(Constant.SWITCHES);
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(QueryBuilders.matchQuery("enabled", true));
+        searchSourceBuilder.size(100);
+        searchRequest.source(searchSourceBuilder);
+        List<Switches> switches = new ArrayList<>();
+        try {
+            SearchResponse searchResponse = client.search(searchRequest);
+            Iterator it = searchResponse.getHits().iterator();
+            while (it.hasNext()) {
+                Switches switchOne = new Switches();
+                SearchHit hit = (SearchHit) it.next();
+                switchOne.setIp(hit.getId());
+                switchOne.setCommunity(hit.getSourceAsMap().get("community").toString());
+                switchOne.setPorts((List<String>) hit.getSourceAsMap().get("ports"));
+                switches.add(switchOne);
+            }
+            //获取最近的一次数量统计
+            return switches;
 
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                client.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return null;
+    }
+
+    public static void main(String[] args) {
+        SnmpData snmpData = new SnmpData();
+        Map<String, String> ipDescMapLong = snmpData.snmpWalk("192.168.1.1", "123qweASD", Constant.Oid.ipDescr.getValue());
+        System.out.println(ipDescMapLong);
     }
 }

@@ -125,6 +125,14 @@ public class Constant {
         return (returnValue + "KB");
     }
 
+    /**
+     * 交换机实时流量表
+     */
     public static final String SNMP_SPEED = "snmp_speed-*";
+
+    /**
+     * 交换机表
+     */
+    public static final String SWITCHES = "switch";
 
 }
